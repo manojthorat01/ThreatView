@@ -11,6 +11,8 @@ const threatTag = (type) => {
   return { display:'inline-block', padding:'2px 8px', borderRadius:'4px', fontSize:'11px', fontWeight:'600', background:bg, color }
 }
 
+const INDUSTRIES = ['Healthcare','Finance','Education','Government','Retail','Technology','Energy','Manufacturing','Legal','Other']
+
 export default function App() {
   const [stats, setStats] = useState(null)
   const [indicators, setIndicators] = useState([])
@@ -18,6 +20,11 @@ export default function App() {
   const [searchResults, setSearchResults] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [alertEmail, setAlertEmail] = useState('')
+  const [alertIndustry, setAlertIndustry] = useState('')
+  const [alertDomain, setAlertDomain] = useState('')
+  const [alertStatus, setAlertStatus] = useState(null)
+  const [alertLoading, setAlertLoading] = useState(false)
 
   useEffect(() => {
     Promise.all([
@@ -40,11 +47,33 @@ export default function App() {
     setSearchResults(res.data)
   }
 
+  const handleAlertRegister = async (e) => {
+    e.preventDefault()
+    if (!alertEmail.trim()) return
+    setAlertLoading(true)
+    try {
+      const res = await axios.post(`${API}/api/alerts/register`, {
+        email: alertEmail,
+        industry: alertIndustry || null,
+        domain: alertDomain || null
+      })
+      setAlertStatus({ success: true, message: res.data.message })
+    } catch (err) {
+      setAlertStatus({ success: false, message: 'Failed to register alert. Is the backend running?' })
+    }
+    setAlertLoading(false)
+  }
+
   if (loading) return <div style={{minHeight:'100vh',background:'#0a0e1a',display:'flex',alignItems:'center',justifyContent:'center',color:'#6366f1',fontSize:'20px'}}>⚡ Loading ThreatView...</div>
-  if (error) return <div style={{minHeight:'100vh',background:'#0a0e1a',display:'flex',alignItems:'center',justifyContent:'center',color:'#ef4444',fontSize:'16px'}}>❌ API Error: {error} — is the backend running on port 8000?</div>
+  if (error) return <div style={{minHeight:'100vh',background:'#0a0e1a',display:'flex',alignItems:'center',justifyContent:'center',color:'#ef4444',fontSize:'16px'}}>❌ API Error: {error}</div>
 
   const otxCount = stats?.by_source?.find(x => x.source==='otx')?.count || 0
   const abuseCount = stats?.by_source?.find(x => x.source==='abuseipdb')?.count || 0
+
+  const inputStyle = {width:'100%',background:'#1f2937',border:'1px solid #374151',borderRadius:'8px',padding:'10px 14px',color:'#e2e8f0',fontSize:'14px',outline:'none',marginBottom:'12px'}
+  const btnStyle = {background:'#6366f1',color:'#fff',border:'none',borderRadius:'8px',padding:'10px 24px',cursor:'pointer',fontWeight:'600',fontSize:'14px'}
+  const cardStyle = {background:'#111827',border:'1px solid #1f2937',borderRadius:'12px',padding:'24px'}
+  const titleStyle = {fontSize:'16px',fontWeight:'600',marginBottom:'20px',color:'#f1f5f9'}
 
   return (
     <div style={{minHeight:'100vh',background:'#0a0e1a'}}>
@@ -59,22 +88,24 @@ export default function App() {
 
       <div style={{padding:'32px',maxWidth:'1400px',margin:'0 auto'}}>
 
+        {/* Stat Cards */}
         <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'20px',marginBottom:'28px'}}>
           {[
             {num: stats?.total_indicators?.toLocaleString(), label:'Total Threat Indicators', color:'#6366f1'},
             {num: abuseCount, label:'Malicious IPs (AbuseIPDB)', color:'#ef4444'},
             {num: otxCount, label:'OTX Threat Indicators', color:'#f59e0b'},
           ].map((c,i) => (
-            <div key={i} style={{background:'#111827',border:'1px solid #1f2937',borderRadius:'12px',padding:'24px'}}>
+            <div key={i} style={cardStyle}>
               <div style={{fontSize:'36px',fontWeight:'800',color:c.color}}>{c.num}</div>
               <div style={{color:'#9ca3af',fontSize:'14px',marginTop:'4px'}}>{c.label}</div>
             </div>
           ))}
         </div>
 
+        {/* Charts */}
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'20px',marginBottom:'28px'}}>
-          <div style={{background:'#111827',border:'1px solid #1f2937',borderRadius:'12px',padding:'24px'}}>
-            <div style={{fontSize:'16px',fontWeight:'600',marginBottom:'20px',color:'#f1f5f9'}}>Threats by Type</div>
+          <div style={cardStyle}>
+            <div style={titleStyle}>Threats by Type</div>
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={stats?.by_threat_type}>
                 <XAxis dataKey="type" stroke="#6b7280" tick={{fontSize:11}} />
@@ -84,9 +115,8 @@ export default function App() {
               </BarChart>
             </ResponsiveContainer>
           </div>
-
-          <div style={{background:'#111827',border:'1px solid #1f2937',borderRadius:'12px',padding:'24px'}}>
-            <div style={{fontSize:'16px',fontWeight:'600',marginBottom:'20px',color:'#f1f5f9'}}>Top Attack Origins</div>
+          <div style={cardStyle}>
+            <div style={titleStyle}>Top Attack Origins</div>
             <ResponsiveContainer width="100%" height={220}>
               <PieChart>
                 <Pie data={stats?.top_countries?.slice(0,6)} dataKey="count" nameKey="country" cx="50%" cy="50%" outerRadius={75} label={({country,percent})=>`${country} ${(percent*100).toFixed(0)}%`} labelLine={false}>
@@ -98,36 +128,64 @@ export default function App() {
           </div>
         </div>
 
-        <div style={{background:'#111827',border:'1px solid #1f2937',borderRadius:'12px',padding:'24px',marginBottom:'28px'}}>
-          <div style={{fontSize:'16px',fontWeight:'600',marginBottom:'20px',color:'#f1f5f9'}}>🔍 IoC Search — Check any IP, Domain, or Hash</div>
-          <form onSubmit={handleSearch}>
-            <input style={{width:'100%',background:'#1f2937',border:'1px solid #374151',borderRadius:'8px',padding:'12px 16px',color:'#e2e8f0',fontSize:'14px',outline:'none',marginBottom:'12px'}} placeholder="Paste a suspicious IP, domain, or file hash..." value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} />
-            <button type="submit" style={{background:'#6366f1',color:'#fff',border:'none',borderRadius:'8px',padding:'10px 24px',cursor:'pointer',fontWeight:'600',fontSize:'14px'}}>Search Threat Database</button>
-          </form>
-          {searchResults && (
-            <div style={{marginTop:'20px'}}>
-              <div style={{color:searchResults.found>0?'#ef4444':'#10b981',fontWeight:'600',marginBottom:'12px',fontSize:'15px'}}>
-                {searchResults.found>0 ? `⚠️ THREAT DETECTED — ${searchResults.found} match(es) for "${searchResults.query}"` : `✅ Clean — "${searchResults.query}" not found in threat database`}
-              </div>
-              {searchResults.results.map((r,i)=>(
-                <div key={i} style={{background:'#1f2937',borderRadius:'8px',padding:'14px',marginBottom:'8px',border:'1px solid #374151'}}>
-                  <div style={{fontFamily:'monospace',color:'#a5b4fc',fontWeight:'600',marginBottom:'6px'}}>{r.value}</div>
-                  <div style={{color:'#9ca3af',fontSize:'13px',display:'flex',gap:'16px',flexWrap:'wrap'}}>
-                    <span>Type: <span style={{color:'#e2e8f0'}}>{r.type}</span></span>
-                    <span>Threat: <span style={threatTag(r.threat_type)}>{r.threat_type}</span></span>
-                    <span>Source: <span style={{color:'#e2e8f0'}}>{r.source}</span></span>
-                    <span>Country: <span style={{color:'#e2e8f0'}}>{r.country||'Unknown'}</span></span>
-                    <span>Confidence: <span style={{color:'#f59e0b'}}>{r.confidence}%</span></span>
-                  </div>
-                  {r.description&&<div style={{color:'#6b7280',fontSize:'12px',marginTop:'6px'}}>{r.description}</div>}
+        {/* Search + Alerts side by side */}
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'20px',marginBottom:'28px'}}>
+
+          {/* IoC Search */}
+          <div style={cardStyle}>
+            <div style={titleStyle}>🔍 IoC Search</div>
+            <form onSubmit={handleSearch}>
+              <input style={inputStyle} placeholder="Paste a suspicious IP, domain, or hash..." value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} />
+              <button type="submit" style={btnStyle}>Search Threat Database</button>
+            </form>
+            {searchResults && (
+              <div style={{marginTop:'16px'}}>
+                <div style={{color:searchResults.found>0?'#ef4444':'#10b981',fontWeight:'600',marginBottom:'10px'}}>
+                  {searchResults.found>0 ? `⚠️ THREAT DETECTED — ${searchResults.found} match(es)` : `✅ Clean — not found in threat database`}
                 </div>
-              ))}
-            </div>
-          )}
+                {searchResults.results.map((r,i)=>(
+                  <div key={i} style={{background:'#1f2937',borderRadius:'8px',padding:'12px',marginBottom:'8px',border:'1px solid #374151'}}>
+                    <div style={{fontFamily:'monospace',color:'#a5b4fc',fontWeight:'600',marginBottom:'4px'}}>{r.value}</div>
+                    <div style={{color:'#9ca3af',fontSize:'12px',display:'flex',gap:'12px',flexWrap:'wrap'}}>
+                      <span>Type: <span style={{color:'#e2e8f0'}}>{r.type}</span></span>
+                      <span>Threat: <span style={threatTag(r.threat_type)}>{r.threat_type}</span></span>
+                      <span>Country: <span style={{color:'#e2e8f0'}}>{r.country||'Unknown'}</span></span>
+                      <span>Confidence: <span style={{color:'#f59e0b'}}>{r.confidence}%</span></span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Alert Registration */}
+          <div style={cardStyle}>
+            <div style={titleStyle}>🔔 Custom Threat Alerts</div>
+            <p style={{color:'#9ca3af',fontSize:'13px',marginBottom:'16px'}}>
+              Get emailed when threats matching your industry or domain are detected.
+            </p>
+            <form onSubmit={handleAlertRegister}>
+              <input style={inputStyle} type="email" placeholder="Your email address *" value={alertEmail} onChange={e=>setAlertEmail(e.target.value)} required />
+              <select style={{...inputStyle,cursor:'pointer'}} value={alertIndustry} onChange={e=>setAlertIndustry(e.target.value)}>
+                <option value="">Select your industry (optional)</option>
+                {INDUSTRIES.map(ind => <option key={ind} value={ind}>{ind}</option>)}
+              </select>
+              <input style={inputStyle} placeholder="Your domain to monitor e.g. mycompany.com (optional)" value={alertDomain} onChange={e=>setAlertDomain(e.target.value)} />
+              <button type="submit" style={{...btnStyle, opacity: alertLoading ? 0.7 : 1}} disabled={alertLoading}>
+                {alertLoading ? 'Registering...' : 'Register for Alerts'}
+              </button>
+            </form>
+            {alertStatus && (
+              <div style={{marginTop:'12px',padding:'12px',borderRadius:'8px',background: alertStatus.success ? '#064e3b' : '#7f1d1d',color: alertStatus.success ? '#6ee7b7' : '#fca5a5',fontSize:'13px',fontWeight:'600'}}>
+                {alertStatus.success ? '✅' : '❌'} {alertStatus.message}
+              </div>
+            )}
+          </div>
         </div>
 
-        <div style={{background:'#111827',border:'1px solid #1f2937',borderRadius:'12px',padding:'24px'}}>
-          <div style={{fontSize:'16px',fontWeight:'600',marginBottom:'20px',color:'#f1f5f9'}}>🚨 Recent Indicators of Compromise (IoCs)</div>
+        {/* IoC Table */}
+        <div style={cardStyle}>
+          <div style={titleStyle}>🚨 Recent Indicators of Compromise (IoCs)</div>
           <table style={{width:'100%',borderCollapse:'collapse',fontSize:'13px'}}>
             <thead>
               <tr>

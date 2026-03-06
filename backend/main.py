@@ -2,15 +2,19 @@ from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+from pydantic import BaseModel
 from models.database import engine, get_db
 from models.threat import ThreatIndicator
+from models.user_alert import UserAlert
 from scheduler.jobs import start_scheduler, run_all_ingestors
 
 ThreatIndicator.metadata.create_all(bind=engine)
+UserAlert.metadata.create_all(bind=engine)
 
 app = FastAPI(title="ThreatView API", version="1.0.0")
 
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=False, allow_methods=["*"], allow_headers=["*"])
+
 @app.on_event("startup")
 def startup_event():
     print("ThreatView starting up...")
@@ -53,3 +57,27 @@ def search_indicator(q: str, db: Session = Depends(get_db)):
         "query": q, "found": len(results),
         "results": [{"value": r.indicator_value, "type": r.indicator_type, "threat_type": r.threat_type, "confidence": r.confidence_score, "source": r.source, "country": r.country, "description": r.description} for r in results]
     }
+
+class AlertConfig(BaseModel):
+    email: str
+    industry: str = None
+    domain: str = None
+
+@app.post("/api/alerts/register")
+def register_alert(config: AlertConfig, db: Session = Depends(get_db)):
+    existing = db.query(UserAlert).filter(UserAlert.email == config.email).first()
+    if existing:
+        existing.industry = config.industry
+        existing.domain = config.domain
+        db.commit()
+        return {"message": f"Alert updated for {config.email}", "status": "updated"}
+    alert = UserAlert(email=config.email, industry=config.industry, domain=config.domain)
+    db.add(alert)
+    db.commit()
+    return {"message": f"Alerts registered for {config.email}", "status": "created"}
+
+@app.get("/api/alerts/test/{email}")
+def test_alert(email: str):
+    from api.alerts import send_alert_email
+    result = send_alert_email(email, "ThreatView Test Alert", "<p>Your ThreatView alerts are configured correctly!</p>")
+    return {"sent": result, "email": email}
