@@ -83,7 +83,7 @@ export default function App() {
         <div style={{display:'flex',alignItems:'center',gap:'16px'}}>
           <span style={{color:'#6b7280',fontSize:'13px'}}>Updated: {new Date().toLocaleTimeString()}</span>
           <span style={{background:'#10b981',color:'#fff',fontSize:'11px',padding:'3px 10px',borderRadius:'20px',fontWeight:'600'}}>● LIVE</span>
-        </div>
+          <a href="http://localhost:8000/api/report/pdf" target="_blank" style={{background:'#1f2937',color:'#e2e8f0',border:'1px solid #374151',borderRadius:'8px',padding:'8px 16px',cursor:'pointer',fontWeight:'600',fontSize:'13px',textDecoration:'none'}}>📄 Download Report</a>        </div>
       </div>
 
       <div style={{padding:'32px',maxWidth:'1400px',margin:'0 auto'}}>
