@@ -19,24 +19,5 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=False,
 
 @app.on_event("startup")
 def startup_event():
-    print
-cd ~/Desktop/ThreatView
-cat > render.yaml << 'EOF'
-services:
-  - type: web
-    name: threatview-backend
-    runtime: python
-    rootDir: backend
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
-    envVars:
-      - key: DATABASE_URL
-        sync: false
-      - key: OTX_API_KEY
-        sync: false
-      - key: ABUSEIPDB_API_KEY
-        sync: false
-      - key: SENDGRID_API_KEY
-        sync: false
-      - key: FROM_EMAIL
-        sync: false
+    start_scheduler()
+    print("ThreatView API started successfully.")
